@@ -14,8 +14,6 @@ import { cn } from "@/lib/utils";
 
 import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
-
 const sansFont = Nunito({
     variable: "--font-sans",
     subsets: ["latin"],
@@ -34,7 +32,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: PropsWithChildren) {
     return (
         <ConvexAuthNextjsServerProvider>
-            <html lang="en" className={inter.variable}>
+            <html lang="en" className="dark" suppressHydrationWarning>
                 <body
                     className={cn(
                         "antialiased",
