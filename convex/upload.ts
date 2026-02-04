@@ -25,16 +25,21 @@ export const startAnalysis = mutation({
     args: v.object({
         storageId: v.id("_storage"),
     }),
-    handler: async (ctx, args) => {
+    handler: async (ctx, { storageId }) => {
         const user = await ensureUser(ctx);
 
         if (user.analysisStatus && user.analysisStatus !== "not_started") {
             throw new ConvexError("User already has an analysis in progress");
         }
 
+        const storageUrl = ctx.storage.getUrl(storageId);
+
+        if (!storageUrl) {
+            throw new ConvexError("Invalid storage ID");
+        }
+
         await ctx.db.patch(user._id, {
-            analysisStorageId: args.storageId,
-            analysisStatus: "in_progress",
+            analysisStorageId: storageId,
         });
 
         ctx.scheduler.runAfter(0, internal.analysis.performAnalysis, {

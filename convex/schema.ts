@@ -1,7 +1,24 @@
 import { authTables } from "@convex-dev/auth/server";
-import { vWorkId } from "@convex-dev/workpool";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+
+export const vAnalysisStatus = v.union(
+    v.literal("not_started"),
+    v.literal("in_progress"),
+    v.literal("completed"),
+    v.literal("failed"),
+);
+
+export enum AnalysisStep {
+    DECOMPRESSING,
+    PARSING,
+    MERGING,
+}
+
+export const vAnalysisStep = v.union(
+    v.literal(AnalysisStep.PARSING),
+    v.literal(AnalysisStep.MERGING),
+);
 
 const schema = defineSchema({
     ...authTables,
@@ -16,33 +33,26 @@ const schema = defineSchema({
 
         hasUploadUrl: v.optional(v.boolean()),
         analysisStorageId: v.optional(v.id("_storage")),
-        analysisStatus: v.optional(
-            v.union(
-                v.literal("not_started"),
-                v.literal("in_progress"),
-                v.literal("completed"),
-                v.literal("failed"),
-            ),
-        ),
-        totalWorkItems: v.optional(v.number()),
-        // fileWorkIds: v.optional(v.array(vWorkId)),
+        analysisStatus: v.optional(vAnalysisStatus),
+        analysisStep: v.optional(vAnalysisStep),
+        analysisMessage: v.optional(v.string()),
     }).index("email", ["email"]),
+
+    partialAnalysisSongs: defineTable({
+        userId: v.id("users"),
+        timesPlayed: v.number(),
+        spotifyId: v.string(),
+        firstPlayed: v.number(),
+    }).index("userId", ["userId"]),
 
     analysisSongs: defineTable({
         userId: v.id("users"),
-        title: v.string(),
-        artist: v.string(),
-        album: v.string(),
         timesPlayed: v.number(),
-        spotifyId: v.optional(v.string()),
+        spotifyId: v.string(),
         firstPlayed: v.number(),
     })
-        .index("userId_title_artist_album", [
-            "userId",
-            "title",
-            "artist",
-            "album",
-        ])
+        .index("userId_timesPlayed", ["userId", "timesPlayed"])
+        .index("userId_spotifyId", ["userId", "spotifyId"])
         .index("userId", ["userId"]),
 });
 

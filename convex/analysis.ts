@@ -1,5 +1,3 @@
-import { WorkId } from "@convex-dev/workpool";
-import { FunctionArgs } from "convex/server";
 import { v } from "convex/values";
 
 import { internal } from "@/convex/api";
@@ -10,21 +8,15 @@ import {
     internalQuery,
 } from "@/convex/server";
 
-import {
-    analysisFileWorkpool,
-    analysisItemDispatchWorkpool,
-    analysisItemWorkpool,
-    counter,
-    workflow,
-} from "./lib/components";
+import { analysisWorkpool } from "./lib/components";
+import { AnalysisStep, vAnalysisStatus, vAnalysisStep } from "./schema";
 
 export const clearAllForUser = internalMutation({
     args: v.object({
         userId: v.id("users"),
     }),
     handler: async (ctx, { userId }) => {
-        await analysisItemWorkpool.cancelAll(ctx);
-        await analysisFileWorkpool.cancelAll(ctx);
+        await analysisWorkpool.cancelAll(ctx);
 
         const songs = await ctx.db
             .query("analysisSongs")
@@ -34,49 +26,139 @@ export const clearAllForUser = internalMutation({
         for (const song of songs) {
             await ctx.db.delete(song._id);
         }
+
+        const partialSongs = await ctx.db
+            .query("partialAnalysisSongs")
+            .withIndex("userId", (q) => q.eq("userId", userId))
+            .collect();
+
+        for (const song of partialSongs) {
+            await ctx.db.delete(song._id);
+        }
     },
 });
 
-export const performAnalysisWorkflow = workflow.define({
+export const performAnalysisWorkflow = internalAction({
     args: {
         userId: v.id("users"),
     },
-    handler: async (step, args) => {
-        const user = await step.runQuery(
-            internal.analysis.analysisGetUser,
-            args,
-        );
-        const { storageIds, itemsCount } = await step.runAction(
-            internal.analysisnode.decompressAndSave,
-            {
-                storageId: user.analysisStorageId!,
-            },
-        );
+    handler: async (ctx, args) => {
+        try {
+            await ctx.runMutation(internal.analysis.updateAnalysisWork, {
+                userId: args.userId,
+                status: "in_progress",
+            });
 
-        // await Promise.all(
-        //     individualFileIds.map(async (fileId) => {
-        //         await step.runAction(internal.analysis.analysisProcessFile, {
-        //             fileId,
-        //             userId: args.userId,
-        //         });
-        //     }),
-        // );
-
-        await step.runMutation(internal.analysis.analysisApplyItemsCount, {
-            userId: args.userId,
-            itemsCount,
-        });
-
-        for (const fileId of storageIds) {
-            await analysisFileWorkpool.enqueueAction(
-                step,
-                internal.analysis.analysisProcessFile,
-                {
-                    fileId,
-                    userId: args.userId,
-                },
+            const user = await ctx.runQuery(
+                internal.analysis.analysisGetUser,
+                args,
             );
+
+            let step = user.analysisStep ?? -1;
+
+            if (step < AnalysisStep.PARSING) {
+                await ctx.runMutation(internal.analysis.updateAnalysisWork, {
+                    userId: args.userId,
+                    step: AnalysisStep.PARSING,
+                });
+
+                const storageIds = await ctx.runAction(
+                    internal.analysisnode.decompressAndSave,
+                    {
+                        storageId: user.analysisStorageId!,
+                    },
+                );
+
+                for (const fileId of storageIds) {
+                    await ctx.runAction(internal.analysis.analysisProcessFile, {
+                        fileId,
+                        userId: args.userId,
+                    });
+                }
+            }
+
+            if (step <= AnalysisStep.MERGING) {
+                await ctx.runMutation(internal.analysis.updateAnalysisWork, {
+                    userId: args.userId,
+                    step: AnalysisStep.MERGING,
+                });
+
+                const startedMergeAt = Date.now();
+                let cursor: string | null = null;
+                let done = false;
+                while (!done) {
+                    if (Date.now() - startedMergeAt > 5 * 60 * 1000) {
+                        await ctx.runMutation(
+                            internal.analysis.updateAnalysisWork,
+                            {
+                                userId: args.userId,
+                                status: "in_progress",
+                                message:
+                                    "Lots of data, analysis may take a while",
+                            },
+                        );
+
+                        break;
+                    }
+
+                    const result: { nextCursor: string; done: boolean } =
+                        await ctx.runMutation(
+                            internal.analysis
+                                .analysisNextBatchMergePartialAggregates,
+                            {
+                                userId: args.userId,
+                                cursor: cursor,
+                            },
+                        );
+                    cursor = result.nextCursor;
+                    done = result.done;
+                }
+
+                if (!done) {
+                    await analysisWorkpool.enqueueAction(
+                        ctx,
+                        internal.analysis.performAnalysisWorkflow,
+                        args,
+                    );
+                    return;
+                }
+            }
+
+            await ctx.runMutation(internal.analysis.updateAnalysisWork, {
+                userId: args.userId,
+                status: "completed",
+            });
+        } catch (e) {
+            await ctx.runMutation(internal.analysis.updateAnalysisWork, {
+                userId: args.userId,
+                status: "failed",
+            });
+            throw e;
         }
+    },
+});
+
+export const updateAnalysisWork = internalMutation({
+    args: v.object({
+        userId: v.id("users"),
+        status: v.optional(vAnalysisStatus),
+        step: v.optional(vAnalysisStep),
+        message: v.optional(v.string()),
+    }),
+    handler: async (ctx, { userId, status, step, message }) => {
+        const updateData: Partial<Doc<"users">> = {};
+
+        if (step !== undefined) {
+            updateData.analysisStep = step;
+        }
+        if (message !== undefined) {
+            updateData.analysisMessage = message;
+        }
+        if (status !== undefined) {
+            updateData.analysisStatus = status;
+        }
+
+        await ctx.db.patch(userId, updateData);
     },
 });
 
@@ -85,9 +167,11 @@ export const performAnalysis = internalAction({
         userId: v.id("users"),
     }),
     handler: async (ctx, { userId }) => {
-        await workflow.start(ctx, internal.analysis.performAnalysisWorkflow, {
-            userId,
-        });
+        await analysisWorkpool.enqueueAction(
+            ctx,
+            internal.analysis.performAnalysisWorkflow,
+            { userId },
+        );
     },
 });
 
@@ -100,17 +184,13 @@ export const analysisGetUser = internalQuery({
     },
 });
 
-export const analysisApplyItemsCount = internalMutation({
-    args: v.object({
-        userId: v.id("users"),
-        itemsCount: v.number(),
+const vMapData = v.record(
+    v.string(),
+    v.object({
+        count: v.number(),
+        firstPlayed: v.number(),
     }),
-    handler: async (ctx, { userId, itemsCount }) => {
-        await ctx.db.patch(userId, {
-            totalWorkItems: itemsCount,
-        });
-    },
-});
+);
 
 export const analysisProcessFile = internalAction({
     args: v.object({
@@ -125,9 +205,7 @@ export const analysisProcessFile = internalAction({
         const jsonStr = decoder.decode(fileData);
         const itemsData = JSON.parse(jsonStr);
 
-        const args: FunctionArgs<
-            typeof internal.analysis.analysisProcessFileEntry
-        >[] = [];
+        const songMap = new Map<string, { count: number; firstPlayed: Date }>();
 
         for (const item of itemsData) {
             if (
@@ -139,93 +217,117 @@ export const analysisProcessFile = internalAction({
             }
 
             const playedDate = new Date(item.ts);
-            const trackName = item.master_metadata_track_name;
-            const artistName = item.master_metadata_album_artist_name;
-            const albumName = item.master_metadata_album_album_name;
+            const trackId = item.spotify_track_uri as string;
 
-            args.push({
-                ts: playedDate.getTime(),
-                trackName: trackName,
-                artistName: artistName,
-                albumName: albumName,
-                userId: userId,
-            });
+            if (songMap.has(trackId)) {
+                const existing = songMap.get(trackId)!;
+                existing.count += 1;
+                if (playedDate < existing.firstPlayed) {
+                    existing.firstPlayed = playedDate;
+                }
+            } else {
+                songMap.set(trackId, { count: 1, firstPlayed: playedDate });
+            }
         }
 
-        // batch args into chunks of 8000
-        const chunks: FunctionArgs<
-            typeof internal.analysis.analysisProcessFileEntry
-        >[][] = [];
-        const chunkSize = 1000;
-        for (let i = 0; i < args.length; i += chunkSize) {
-            chunks.push(args.slice(i, i + chunkSize));
-        }
+        const batchSize = 500;
+        const entries = Array.from(songMap.entries());
+        for (let i = 0; i < entries.length; i += batchSize) {
+            const batchEntries = entries.slice(i, i + batchSize);
+            const mapData: Record<
+                string,
+                { count: number; firstPlayed: number }
+            > = {};
+            for (const [key, info] of batchEntries) {
+                mapData[key] = {
+                    count: info.count,
+                    firstPlayed: info.firstPlayed.getTime(),
+                };
+            }
 
-        await analysisItemDispatchWorkpool.enqueueActionBatch(
-            ctx,
-            internal.analysis.enqueueAnalysisFileEntryBatch,
-            chunks.map((chunk) => ({ entries: chunk })),
-        );
+            await ctx.runMutation(
+                internal.analysis.analysisWriteBatchedAggregateUpdates,
+                {
+                    data: mapData,
+                    userId,
+                },
+            );
+        }
 
         return null;
     },
 });
 
-const vAnalysisProcessFileEntryArgs = v.object({
-    ts: v.number(),
-    trackName: v.string(),
-    artistName: v.string(),
-    albumName: v.string(),
-    userId: v.id("users"),
-});
-
-export const enqueueAnalysisFileEntryBatch = internalAction({
+export const analysisWriteBatchedAggregateUpdates = internalMutation({
     args: v.object({
-        entries: v.array(vAnalysisProcessFileEntryArgs),
+        data: vMapData,
+        userId: v.id("users"),
     }),
-    handler: async (ctx, { entries }) => {
-        await analysisItemWorkpool.enqueueMutationBatch(
-            ctx,
-            internal.analysis.analysisProcessFileEntry,
-            entries,
-        );
+    handler: async (ctx, { data, userId }) => {
+        for (const [key, info] of Object.entries(data)) {
+            await ctx.db.insert("partialAnalysisSongs", {
+                userId,
+                spotifyId: key,
+                timesPlayed: info.count,
+                firstPlayed: info.firstPlayed,
+            });
+        }
     },
 });
 
-export const analysisProcessFileEntry = internalMutation({
-    args: vAnalysisProcessFileEntryArgs,
-    handler: async (ctx, { ts, trackName, albumName, artistName, userId }) => {
-        await counter.inc(
-            ctx,
-            "analysisProcessFileEntry_calls_for_" + userId.toString(),
-        );
+export const analysisNextBatchMergePartialAggregates = internalMutation({
+    args: v.object({
+        userId: v.id("users"),
+        cursor: v.union(v.string(), v.null()),
+    }),
+    handler: async (
+        ctx,
+        { userId, cursor },
+    ): Promise<{ nextCursor: string; done: boolean }> => {
+        const batchSize = 500;
 
-        const existingEntry = await ctx.db
-            .query("analysisSongs")
-            .withIndex("userId_title_artist_album", (q) =>
-                q
-                    .eq("userId", userId)
-                    .eq("title", trackName)
-                    .eq("artist", artistName)
-                    .eq("album", albumName),
-            )
-            .collect();
+        const partialSongs = await ctx.db
+            .query("partialAnalysisSongs")
+            .withIndex("userId", (q) => q.eq("userId", userId))
+            .paginate({
+                numItems: batchSize,
+                cursor,
+            });
 
-        if (existingEntry.length === 0) {
-            await ctx.db.insert("analysisSongs", {
-                userId: userId,
-                title: trackName,
-                artist: artistName,
-                album: albumName,
-                timesPlayed: 1,
-                firstPlayed: ts,
-            });
-        } else {
-            const entry = existingEntry[0];
-            await ctx.db.patch(entry._id, {
-                timesPlayed: entry.timesPlayed + 1,
-                firstPlayed: Math.min(entry.firstPlayed, ts),
-            });
+        for (const partialSong of partialSongs.page) {
+            const existingSong = await ctx.db
+                .query("analysisSongs")
+                .withIndex("userId_spotifyId", (q) =>
+                    q
+                        .eq("userId", userId)
+                        .eq("spotifyId", partialSong.spotifyId),
+                )
+                .first();
+
+            if (existingSong) {
+                await ctx.db.patch(existingSong._id, {
+                    timesPlayed:
+                        existingSong.timesPlayed + partialSong.timesPlayed,
+                    firstPlayed: Math.min(
+                        existingSong.firstPlayed,
+                        partialSong.firstPlayed,
+                    ),
+                });
+            } else {
+                await ctx.db.insert("analysisSongs", {
+                    userId,
+                    spotifyId: partialSong.spotifyId,
+                    timesPlayed: partialSong.timesPlayed,
+                    firstPlayed: partialSong.firstPlayed,
+                });
+            }
+
+            await ctx.db.delete(partialSong._id);
         }
+
+        return {
+            nextCursor: partialSongs.continueCursor,
+            done: partialSongs.isDone,
+        };
     },
 });

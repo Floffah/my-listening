@@ -10,6 +10,8 @@ import { api } from "@/convex/api";
 export default function Page() {
     const currentUser = useQuery(api.user.currentUser);
 
+    console.log(currentUser);
+
     if (!currentUser) {
         return null;
     }
@@ -20,7 +22,7 @@ export default function Page() {
                 !currentUser.analysisStatus) && <Upload key="upload" />}
 
             {currentUser.analysisStatus === "in_progress" && (
-                <InProgress key="in-progress" />
+                <InProgress key="in-progress" user={currentUser} />
             )}
         </AnimatePresence>
     );

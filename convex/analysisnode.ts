@@ -18,7 +18,6 @@ export const decompressAndSave = internalAction({
         });
 
         const storageIds: Id<"_storage">[] = [];
-        let itemsCount = 0;
 
         for (const [fileName, fileData] of Object.entries(decompressed)) {
             const jsonStr = strFromU8(fileData);
@@ -26,9 +25,8 @@ export const decompressAndSave = internalAction({
             const newStorageId = await ctx.storage.store(blob);
 
             storageIds.push(newStorageId);
-            itemsCount += JSON.parse(jsonStr).length;
         }
 
-        return { storageIds, itemsCount };
+        return storageIds;
     },
 });

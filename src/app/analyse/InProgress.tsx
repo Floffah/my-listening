@@ -3,8 +3,9 @@
 import { motion } from "motion/react";
 
 import Loader from "@/components/Loader";
+import { Doc } from "@/convex/dataModel";
 
-export default function InProgress() {
+export default function InProgress({ user }: { user: Doc<"users"> }) {
     return (
         <motion.div
             initial={{
@@ -31,6 +32,18 @@ export default function InProgress() {
                     will continue in the background (but may pause if you
                     neglect our questions)
                 </p>
+
+                {user.analysisStep && (
+                    <p className="text-xs text-muted-foreground">
+                        Current analysis step: {user.analysisStep}
+                    </p>
+                )}
+
+                {user.analysisMessage && (
+                    <p className="text-xs text-muted-foreground">
+                        {user.analysisMessage}
+                    </p>
+                )}
             </div>
         </motion.div>
     );
