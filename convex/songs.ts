@@ -14,6 +14,7 @@ import {
 
 import { env } from "./convex.env";
 import { ensureUser } from "./lib/auth";
+import { spotifyAddWorkpool } from "./lib/components";
 import { vSpotifyAccessToken } from "./schema";
 
 const spotify = SpotifyApi.withClientCredentials(
@@ -78,13 +79,29 @@ export const addToSpotify = mutation({
             throw new ConvexError("User's Spotify access token has expired");
         }
 
-        await ctx.scheduler.runAfter(0, internal.songs.internalCreatePlaylist, {
-            userId: user._id,
+        await spotifyAddWorkpool.enqueueAction(
+            ctx,
+            internal.songs.internalAddSongsToPlaylist,
+            {
+                userId: user._id,
+            },
+        );
+    },
+});
+
+export const internalUpdateSpotifyToken = internalMutation({
+    args: v.object({
+        userId: v.id("users"),
+        token: vSpotifyAccessToken,
+    }),
+    handler: async (ctx, { userId, token }) => {
+        await ctx.db.patch(userId, {
+            spotifyAccessData: token,
         });
     },
 });
 
-export const internalCreatePlaylist = internalAction({
+export const internalAddSongsToPlaylist = internalAction({
     args: v.object({
         userId: v.id("users"),
     }),
@@ -111,55 +128,6 @@ export const internalCreatePlaylist = internalAction({
             },
         );
 
-        const tokens = await spotifyUserApi.getAccessToken();
-
-        if (tokens) {
-            await ctx.runMutation(internal.songs.internalUpdateSpotifyToken, {
-                userId,
-                token: {
-                    access_token: tokens.access_token,
-                    token_type: tokens.token_type,
-                    expires_in: tokens.expires_in,
-                    refresh_token: tokens.refresh_token,
-                    expires: tokens.expires,
-                },
-            });
-        }
-
-        await ctx.runAction(internal.songs.internalAddSongsToPlaylist, {
-            userId,
-            playlistId: playlist.id,
-        });
-    },
-});
-
-export const internalUpdateSpotifyToken = internalMutation({
-    args: v.object({
-        userId: v.id("users"),
-        token: vSpotifyAccessToken,
-    }),
-    handler: async (ctx, { userId, token }) => {
-        await ctx.db.patch(userId, {
-            spotifyAccessData: token,
-        });
-    },
-});
-
-export const internalAddSongsToPlaylist = internalAction({
-    args: v.object({
-        userId: v.id("users"),
-        playlistId: v.string(),
-    }),
-    handler: async (ctx, { userId, playlistId }) => {
-        const user = await ctx.runQuery(internal.user.internalGetUserById, {
-            userId,
-        });
-
-        const spotifyUserApi = SpotifyApi.withAccessToken(
-            env.SPOTIFY_CLIENT_ID,
-            user.spotifyAccessData!,
-        );
-
         let done = false;
         let cursor: string | null = null;
 
@@ -175,7 +143,7 @@ export const internalAddSongsToPlaylist = internalAction({
 
             if (songs.spotifyIds.length > 0) {
                 await spotifyUserApi.playlists.addItemsToPlaylist(
-                    playlistId,
+                    playlist.id,
                     songs.spotifyIds,
                 );
             }

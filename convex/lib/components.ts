@@ -9,3 +9,7 @@ import { components } from "@/convex/api";
 export const analysisWorkpool = new Workpool(components.analysisWorkpool, {
     maxParallelism: 1,
 });
+
+export const spotifyAddWorkpool = new Workpool(components.spotifyAddWorkpool, {
+    maxParallelism: 1,
+});
