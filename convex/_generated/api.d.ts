@@ -14,6 +14,7 @@ import type * as auth from "../auth.js";
 import type * as http from "../http.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_components from "../lib/components.js";
+import type * as songs from "../songs.js";
 import type * as upload from "../upload.js";
 import type * as user from "../user.js";
 
@@ -30,6 +31,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   "lib/auth": typeof lib_auth;
   "lib/components": typeof lib_components;
+  songs: typeof songs;
   upload: typeof upload;
   user: typeof user;
 }>;

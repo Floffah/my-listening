@@ -1,4 +1,5 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
+import { v } from "convex/values";
 
 import { Doc } from "@/convex/dataModel";
 import { internalQuery, query } from "@/convex/server";
@@ -19,5 +20,14 @@ export const currentUser = query({
 export const internalEnsureUser = internalQuery({
     handler: async (ctx) => {
         return await ensureUser(ctx);
+    },
+});
+
+export const internalGetUserById = internalQuery({
+    args: {
+        userId: v.id("users"),
+    },
+    handler: async (ctx, { userId }) => {
+        return (await ctx.db.get(userId)) as Doc<"users">;
     },
 });

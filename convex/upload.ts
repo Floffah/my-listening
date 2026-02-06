@@ -40,6 +40,10 @@ export const startAnalysis = mutation({
 
         await ctx.db.patch(user._id, {
             analysisStorageId: storageId,
+            analysisStartedAt: Date.now(),
+            analysisStatus: "in_progress",
+            analysisStep: -1,
+            analysisMessage: undefined,
         });
 
         ctx.scheduler.runAfter(0, internal.analysis.performAnalysis, {

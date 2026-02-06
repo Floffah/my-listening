@@ -33,7 +33,7 @@ export default function InProgress({ user }: { user: Doc<"users"> }) {
                     neglect our questions)
                 </p>
 
-                {user.analysisStep && (
+                {typeof user.analysisStep === "number" && (
                     <p className="text-xs text-muted-foreground">
                         Current analysis step: {user.analysisStep}
                     </p>

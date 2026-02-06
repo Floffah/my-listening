@@ -44,6 +44,8 @@ export const performAnalysisWorkflow = internalAction({
     },
     handler: async (ctx, args) => {
         try {
+            const startedActionAt = Date.now();
+
             await ctx.runMutation(internal.analysis.updateAnalysisWork, {
                 userId: args.userId,
                 status: "in_progress",
@@ -54,7 +56,7 @@ export const performAnalysisWorkflow = internalAction({
                 args,
             );
 
-            let step = user.analysisStep ?? -1;
+            const step = user.analysisStep ?? -1;
 
             if (step < AnalysisStep.PARSING) {
                 await ctx.runMutation(internal.analysis.updateAnalysisWork, {
@@ -83,11 +85,10 @@ export const performAnalysisWorkflow = internalAction({
                     step: AnalysisStep.MERGING,
                 });
 
-                const startedMergeAt = Date.now();
                 let cursor: string | null = null;
                 let done = false;
                 while (!done) {
-                    if (Date.now() - startedMergeAt > 5 * 60 * 1000) {
+                    if (Date.now() - startedActionAt > 6 * 60 * 1000) {
                         await ctx.runMutation(
                             internal.analysis.updateAnalysisWork,
                             {
@@ -105,6 +106,52 @@ export const performAnalysisWorkflow = internalAction({
                         await ctx.runMutation(
                             internal.analysis
                                 .analysisNextBatchMergePartialAggregates,
+                            {
+                                userId: args.userId,
+                                cursor: cursor,
+                            },
+                        );
+                    cursor = result.nextCursor;
+                    done = result.done;
+                }
+
+                if (!done) {
+                    await analysisWorkpool.enqueueAction(
+                        ctx,
+                        internal.analysis.performAnalysisWorkflow,
+                        args,
+                    );
+                    return;
+                }
+            }
+
+            if (step <= AnalysisStep.FILTERING) {
+                await ctx.runMutation(internal.analysis.updateAnalysisWork, {
+                    userId: args.userId,
+                    step: AnalysisStep.FILTERING,
+                });
+
+                const startedFilterAt = Date.now();
+                let cursor: string | null = null;
+                let done = false;
+
+                while (!done) {
+                    if (Date.now() - startedFilterAt > 9 * 60 * 1000) {
+                        await ctx.runMutation(
+                            internal.analysis.updateAnalysisWork,
+                            {
+                                userId: args.userId,
+                                status: "in_progress",
+                                message:
+                                    "Lots of data, analysis may take a while",
+                            },
+                        );
+                        break;
+                    }
+
+                    const result: { nextCursor: string; done: boolean } =
+                        await ctx.runMutation(
+                            internal.analysis.analysisNextBatchFilterSongs,
                             {
                                 userId: args.userId,
                                 cursor: cursor,
@@ -328,6 +375,39 @@ export const analysisNextBatchMergePartialAggregates = internalMutation({
         return {
             nextCursor: partialSongs.continueCursor,
             done: partialSongs.isDone,
+        };
+    },
+});
+
+export const analysisNextBatchFilterSongs = internalMutation({
+    args: v.object({
+        userId: v.id("users"),
+        cursor: v.union(v.string(), v.null()),
+    }),
+    handler: async (
+        ctx,
+        { userId, cursor },
+    ): Promise<{ nextCursor: string; done: boolean }> => {
+        const batchSize = 500;
+
+        // delete all songs listened less than 10 times
+        const songs = await ctx.db
+            .query("analysisSongs")
+            .withIndex("userId_timesPlayed", (q) =>
+                q.eq("userId", userId).lt("timesPlayed", 10),
+            )
+            .paginate({
+                numItems: batchSize,
+                cursor,
+            });
+
+        for (const song of songs.page) {
+            await ctx.db.delete(song._id);
+        }
+
+        return {
+            nextCursor: songs.continueCursor,
+            done: songs.isDone,
         };
     },
 });

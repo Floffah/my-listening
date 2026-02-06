@@ -10,15 +10,25 @@ export const vAnalysisStatus = v.union(
 );
 
 export enum AnalysisStep {
-    DECOMPRESSING,
     PARSING,
     MERGING,
+    FILTERING,
 }
 
 export const vAnalysisStep = v.union(
+    v.literal(-1),
     v.literal(AnalysisStep.PARSING),
     v.literal(AnalysisStep.MERGING),
+    v.literal(AnalysisStep.FILTERING),
 );
+
+export const vSpotifyAccessToken = v.object({
+    access_token: v.string(),
+    token_type: v.string(),
+    expires_in: v.number(),
+    refresh_token: v.string(),
+    expires: v.optional(v.number()),
+});
 
 const schema = defineSchema({
     ...authTables,
@@ -30,8 +40,11 @@ const schema = defineSchema({
         phone: v.optional(v.string()),
         phoneVerificationTime: v.optional(v.number()),
         isAnonymous: v.optional(v.boolean()),
+        // spotifyAccessToken: v.optional(v.string()),
+        spotifyAccessData: v.optional(vSpotifyAccessToken),
 
         hasUploadUrl: v.optional(v.boolean()),
+        analysisStartedAt: v.optional(v.number()),
         analysisStorageId: v.optional(v.id("_storage")),
         analysisStatus: v.optional(vAnalysisStatus),
         analysisStep: v.optional(vAnalysisStep),
@@ -52,6 +65,7 @@ const schema = defineSchema({
         firstPlayed: v.number(),
     })
         .index("userId_timesPlayed", ["userId", "timesPlayed"])
+        .index("userId_firstPlayed", ["userId", "firstPlayed"])
         .index("userId_spotifyId", ["userId", "spotifyId"])
         .index("userId", ["userId"]),
 });
