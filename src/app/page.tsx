@@ -1,13 +1,34 @@
 "use client";
 
+import { useAuth } from "@clerk/nextjs";
 import { motion } from "motion/react";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
 import LoginWithSpotify from "@/app/LoginWithSpotify";
-import { ConvexFull, SpotifyFull, VercelFull } from "@/components/icons";
+import {
+    ClerkFull,
+    ConvexFull,
+    SpotifyFull,
+    VercelFull,
+} from "@/components/icons";
 
 const MotionLoginWithSpotify = motion(LoginWithSpotify);
 
 export default function Page() {
+    const { isLoaded, isSignedIn } = useAuth();
+    const router = useRouter();
+
+    useEffect(() => {
+        if (isSignedIn) {
+            router.replace("/analyse");
+        }
+    }, [isSignedIn, router]);
+
+    if (!isLoaded || isSignedIn) {
+        return null;
+    }
+
     return (
         <div className="flex min-h-screen flex-col items-center justify-between p-4">
             <div />
@@ -59,6 +80,14 @@ export default function Page() {
                         rel="noreferrer"
                     >
                         <SpotifyFull className="h-6" />
+                    </a>
+                    <a
+                        className="ml-3 transition-transform hover:scale-105"
+                        href="https://clerk.com"
+                        target="_blank"
+                        rel="noreferrer"
+                    >
+                        <ClerkFull className="h-5" />
                     </a>
                 </div>
             </motion.footer>

@@ -1,22 +1,18 @@
 "use client";
 
-import { useAuthActions } from "@convex-dev/auth/react";
 import { convexAction } from "@convex-dev/react-query";
 import { useQuery } from "@tanstack/react-query";
 import { usePaginatedQuery } from "convex-helpers/react";
-import { useAction, useMutation } from "convex/react";
+import { useMutation } from "convex/react";
 import { format } from "date-fns";
-import Image from "next/image";
 import { useMemo } from "react";
 import { useOnInView } from "react-intersection-observer";
 
-import LoginWithSpotify from "@/app/LoginWithSpotify";
 import { Button } from "@/components/ui/button";
 import { api } from "@/convex/api";
 import { Doc } from "@/convex/dataModel";
 
 export default function SongsList() {
-    const { signOut } = useAuthActions();
     const addToSpotify = useMutation(api.songs.addToSpotify);
 
     const songs = usePaginatedQuery(
@@ -41,20 +37,12 @@ export default function SongsList() {
                         const message =
                             e instanceof Error ? e.message : e.toString();
 
-                        if (message.toLowerCase().includes("expired")) {
-                            alert(
-                                "Your Spotify session has expired. Please log in again.",
-                            );
-                            signOut().then(window.location.reload);
-                        }
+                        alert(message);
                     })
                 }
             >
                 Create chronological playlist in Spotify
             </Button>
-
-            <LoginWithSpotify />
-
             {songs.results.map((song) => (
                 <SpotifySongCard analysisSong={song} key={song._id} />
             ))}

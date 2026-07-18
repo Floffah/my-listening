@@ -1,13 +1,12 @@
 import { ConvexError, v } from "convex/values";
 
-import { internal } from "@/convex/api";
-import { mutation } from "@/convex/server";
-
-import { ensureUser } from "./lib/auth";
+import { internal } from "./_generated/api";
+import { mutation } from "./_generated/server";
+import { ensureOrCreateUser, ensureUser } from "./lib/auth";
 
 export const generateUploadUrl = mutation({
     handler: async (ctx) => {
-        const user = await ensureUser(ctx);
+        const user = await ensureOrCreateUser(ctx);
 
         // if (user.hasUploadUrl) {
         //     throw new ConvexError("User already has an upload URL");

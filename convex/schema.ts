@@ -1,4 +1,3 @@
-import { authTables } from "@convex-dev/auth/server";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
@@ -22,26 +21,9 @@ export const vAnalysisStep = v.union(
     v.literal(AnalysisStep.FILTERING),
 );
 
-export const vSpotifyAccessToken = v.object({
-    access_token: v.string(),
-    token_type: v.string(),
-    expires_in: v.number(),
-    refresh_token: v.string(),
-    expires: v.optional(v.number()),
-});
-
 const schema = defineSchema({
-    ...authTables,
     users: defineTable({
-        name: v.optional(v.string()),
-        image: v.optional(v.string()),
-        email: v.optional(v.string()),
-        emailVerificationTime: v.optional(v.number()),
-        phone: v.optional(v.string()),
-        phoneVerificationTime: v.optional(v.number()),
-        isAnonymous: v.optional(v.boolean()),
-        // spotifyAccessToken: v.optional(v.string()),
-        spotifyAccessData: v.optional(vSpotifyAccessToken),
+        clerkUserId: v.string(),
 
         hasUploadUrl: v.optional(v.boolean()),
         analysisStartedAt: v.optional(v.number()),
@@ -49,7 +31,7 @@ const schema = defineSchema({
         analysisStatus: v.optional(vAnalysisStatus),
         analysisStep: v.optional(vAnalysisStep),
         analysisMessage: v.optional(v.string()),
-    }).index("email", ["email"]),
+    }).index("clerkUserId", ["clerkUserId"]),
 
     partialAnalysisSongs: defineTable({
         userId: v.id("users"),

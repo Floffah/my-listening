@@ -6,7 +6,6 @@ import { internal } from "@/convex/api";
 import {
     action,
     internalAction,
-    internalMutation,
     internalQuery,
     mutation,
     query,
@@ -15,7 +14,6 @@ import {
 import { env } from "./convex.env";
 import { ensureUser } from "./lib/auth";
 import { spotifyAddWorkpool } from "./lib/components";
-import { vSpotifyAccessToken } from "./schema";
 
 const spotify = SpotifyApi.withClientCredentials(
     env.SPOTIFY_CLIENT_ID,
@@ -68,17 +66,6 @@ export const addToSpotify = mutation({
     handler: async (ctx) => {
         const user = await ensureUser(ctx);
 
-        if (!user.spotifyAccessData) {
-            throw new ConvexError("User does not have a Spotify access token");
-        }
-        console.log(user.spotifyAccessData.expires, Date.now() / 1000);
-        if (
-            !user.spotifyAccessData.expires ||
-            user.spotifyAccessData.expires < Date.now() / 1000
-        ) {
-            throw new ConvexError("User's Spotify access token has expired");
-        }
-
         await spotifyAddWorkpool.enqueueAction(
             ctx,
             internal.songs.internalAddSongsToPlaylist,
@@ -86,18 +73,6 @@ export const addToSpotify = mutation({
                 userId: user._id,
             },
         );
-    },
-});
-
-export const internalUpdateSpotifyToken = internalMutation({
-    args: v.object({
-        userId: v.id("users"),
-        token: vSpotifyAccessToken,
-    }),
-    handler: async (ctx, { userId, token }) => {
-        await ctx.db.patch(userId, {
-            spotifyAccessData: token,
-        });
     },
 });
 
@@ -110,9 +85,43 @@ export const internalAddSongsToPlaylist = internalAction({
             userId,
         });
 
+        const response = await fetch(
+            `https://api.clerk.com/v1/users/${encodeURIComponent(user.clerkUserId)}/oauth_access_tokens/oauth_spotify?paginated=true`,
+            {
+                headers: { Authorization: `Bearer ${env.CLERK_SECRET_KEY}` },
+            },
+        );
+
+        if (!response.ok) {
+            throw new ConvexError("Could not access your Spotify connection");
+        }
+
+        const body = (await response.json()) as
+            | { data: { token: string; scopes?: string[] }[] }
+            | { token: string; scopes?: string[] }[];
+        const data = Array.isArray(body) ? body : body.data;
+        const spotifyToken = data[0];
+
+        if (!spotifyToken) {
+            throw new ConvexError("Spotify is not connected to this account");
+        }
+        if (
+            spotifyToken.scopes &&
+            !spotifyToken.scopes.includes("playlist-modify-private")
+        ) {
+            throw new ConvexError(
+                "Spotify needs permission to create private playlists",
+            );
+        }
+
         const spotifyUserApi = SpotifyApi.withAccessToken(
             env.SPOTIFY_CLIENT_ID,
-            user.spotifyAccessData!,
+            {
+                access_token: spotifyToken.token,
+                token_type: "Bearer",
+                expires_in: 0,
+                refresh_token: "",
+            },
         );
 
         const profile = await spotifyUserApi.currentUser.profile();
@@ -150,21 +159,6 @@ export const internalAddSongsToPlaylist = internalAction({
 
             cursor = songs.nextCursor;
             done = songs.done;
-        }
-
-        const tokens = await spotifyUserApi.getAccessToken();
-
-        if (tokens) {
-            await ctx.runMutation(internal.songs.internalUpdateSpotifyToken, {
-                userId,
-                token: {
-                    access_token: tokens.access_token,
-                    token_type: tokens.token_type,
-                    expires_in: tokens.expires_in,
-                    refresh_token: tokens.refresh_token,
-                    expires: tokens.expires,
-                },
-            });
         }
     },
 });

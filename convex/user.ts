@@ -1,20 +1,12 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 
-import { Doc } from "@/convex/dataModel";
-import { internalQuery, query } from "@/convex/server";
-
-import { ensureUser } from "./lib/auth";
+import type { Doc } from "./_generated/dataModel";
+import { internalQuery, query } from "./_generated/server";
+import { ensureUser, currentUser as getCurrentUser } from "./lib/auth";
 
 export const currentUser = query({
     args: {},
-    handler: async (ctx) => {
-        const userId = await getAuthUserId(ctx);
-        if (userId === null) {
-            return null;
-        }
-        return (await ctx.db.get(userId)) as Doc<"users">;
-    },
+    handler: getCurrentUser,
 });
 
 export const internalEnsureUser = internalQuery({

@@ -5,10 +5,7 @@ import { v } from "convex/values";
 export const env = createEnv({
     ...environment,
 
-    // convex auth
-    SITE_URL: v.string(),
-    JWT_PRIVATE_KEY: v.string(),
-    JWKS: v.string(),
+    CLERK_SECRET_KEY: v.string(),
 
     // ours
     SPOTIFY_CLIENT_ID: v.string(),
