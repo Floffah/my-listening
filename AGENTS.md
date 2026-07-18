@@ -1,6 +1,7 @@
 # Agent Instructions
 
 This project is a tool for Spotify that will analyse users' various Spotify data (using things like Spotify Extended Streaming History downloads) in order to tell them about their listening habits, and provide them with insights into their music taste. The main features that currently exist are:
+
 - Create a large "log" like playlist with all the songs a user has listened to more than x amount of times (currently 10) and sorts them chronologically by first listen.
 
 This site is currently very early alpha and has **no** users. Breaking changes are fine, there is no need for migrations at this point.
@@ -8,6 +9,7 @@ This site is currently very early alpha and has **no** users. Breaking changes a
 ## Rules
 
 - If a file changes under your feet while you are working, it is not necessarily a bad thing. If you can decipher that an automated tool did it, and it is not a desirable change, you are welcome to revert it. However, if another agent OR human may have made the change, you should assume it is a good change and adapt to it. If you believe it to be a bad change, stop and clarify.
+- Use `bun test` for all tests. Do not use Vitest.
 
 ### Styling
 
@@ -21,6 +23,7 @@ The hallmark skill should be followed as closely as possible, however there are 
 - Use ShadCN components and styling first and foremost.
 
 Banned patterns examples:
+
 - Arbitrary utilities that call variables: e.g. `text-[var(--color-paper)]`. instead, define paper as a token, pass it to the tailwind theme, and use `text-paper`
 - Arbitrary utilities that use one-off non-tokenised values: e.g. `leading-[0.08rem]`. instead, check if tailwind has its own leading value that works (sometimes tailwind will automatically apply this when using font size) OR tokenise this value in the globals.css file, and use it like `leading-cta`. Generally, using tailwind's builtin theme values are preferred. But if a custom value is truly needed or used in multiple places, it can be tokenised and used based on the rules above.
 
