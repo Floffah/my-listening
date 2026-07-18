@@ -45,7 +45,7 @@ export const startAnalysis = mutation({
             analysisMessage: undefined,
         });
 
-        ctx.scheduler.runAfter(0, internal.analysis.performAnalysis, {
+        await ctx.scheduler.runAfter(0, internal.analysis.performAnalysis, {
             userId: user._id,
         });
 

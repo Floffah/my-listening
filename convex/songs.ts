@@ -44,6 +44,10 @@ export const getSpotifySongData = action({
         spotifyId: v.string(),
     }),
     handler: async (ctx, { spotifyId }) => {
+        if (!(await ctx.auth.getUserIdentity())) {
+            throw new ConvexError("Unauthorized");
+        }
+
         const [, type, id] = spotifyId.split(":");
 
         if (!type || !id || type !== "track") {

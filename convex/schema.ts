@@ -38,7 +38,7 @@ const schema = defineSchema({
         timesPlayed: v.number(),
         spotifyId: v.string(),
         firstPlayed: v.number(),
-    }).index("userId", ["userId"]),
+    }).index("userId_spotifyId", ["userId", "spotifyId"]),
 
     analysisSongs: defineTable({
         userId: v.id("users"),
@@ -48,8 +48,7 @@ const schema = defineSchema({
     })
         .index("userId_timesPlayed", ["userId", "timesPlayed"])
         .index("userId_firstPlayed", ["userId", "firstPlayed"])
-        .index("userId_spotifyId", ["userId", "spotifyId"])
-        .index("userId", ["userId"]),
+        .index("userId_spotifyId", ["userId", "spotifyId"]),
 });
 
 export default schema;

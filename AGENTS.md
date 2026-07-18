@@ -6,6 +6,10 @@ This project is a tool for Spotify that will analyse users' various Spotify data
 
 This site is currently very early alpha and has **no** users. Breaking changes are fine, there is no need for migrations at this point.
 
+## Useful Information
+
+- Most convex and bun commands require sandbox elevation.
+
 ## Rules
 
 - If a file changes under your feet while you are working, it is not necessarily a bad thing. If you can decipher that an automated tool did it, and it is not a desirable change, you are welcome to revert it. However, if another agent OR human may have made the change, you should assume it is a good change and adapt to it. If you believe it to be a bad change, stop and clarify.

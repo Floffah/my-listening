@@ -10,6 +10,7 @@
 
 import type * as analysis from "../analysis.js";
 import type * as analysisnode from "../analysisnode.js";
+import type * as lib_aggregateSongs from "../lib/aggregateSongs.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_components from "../lib/components.js";
 import type * as songs from "../songs.js";
@@ -25,6 +26,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   analysis: typeof analysis;
   analysisnode: typeof analysisnode;
+  "lib/aggregateSongs": typeof lib_aggregateSongs;
   "lib/auth": typeof lib_auth;
   "lib/components": typeof lib_components;
   songs: typeof songs;

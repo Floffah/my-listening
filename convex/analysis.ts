@@ -8,35 +8,9 @@ import {
     internalQuery,
 } from "@/convex/server";
 
+import { mergeSongAggregates } from "./lib/aggregateSongs";
 import { analysisWorkpool } from "./lib/components";
 import { AnalysisStep, vAnalysisStatus, vAnalysisStep } from "./schema";
-
-export const clearAllForUser = internalMutation({
-    args: v.object({
-        userId: v.id("users"),
-    }),
-    handler: async (ctx, { userId }) => {
-        await analysisWorkpool.cancelAll(ctx);
-
-        const songs = await ctx.db
-            .query("analysisSongs")
-            .withIndex("userId", (q) => q.eq("userId", userId))
-            .collect();
-
-        for (const song of songs) {
-            await ctx.db.delete(song._id);
-        }
-
-        const partialSongs = await ctx.db
-            .query("partialAnalysisSongs")
-            .withIndex("userId", (q) => q.eq("userId", userId))
-            .collect();
-
-        for (const song of partialSongs) {
-            await ctx.db.delete(song._id);
-        }
-    },
-});
 
 export const performAnalysisWorkflow = internalAction({
     args: {
@@ -252,28 +226,36 @@ export const analysisProcessFile = internalAction({
         const jsonStr = decoder.decode(fileData);
         const itemsData = JSON.parse(jsonStr);
 
-        const songMap = new Map<string, { count: number; firstPlayed: Date }>();
+        const songMap = new Map<
+            string,
+            { count: number; firstPlayed: number }
+        >();
 
         for (const item of itemsData) {
             if (
                 !item.master_metadata_track_name ||
                 !item.master_metadata_album_artist_name ||
-                !item.master_metadata_album_album_name
+                !item.master_metadata_album_album_name ||
+                typeof item.spotify_track_uri !== "string" ||
+                !item.spotify_track_uri.startsWith("spotify:track:")
             ) {
                 continue;
             }
 
-            const playedDate = new Date(item.ts);
-            const trackId = item.spotify_track_uri as string;
+            const firstPlayed = Date.parse(item.ts);
+            if (!Number.isFinite(firstPlayed)) {
+                continue;
+            }
 
-            if (songMap.has(trackId)) {
-                const existing = songMap.get(trackId)!;
+            const existing = songMap.get(item.spotify_track_uri);
+            if (existing) {
                 existing.count += 1;
-                if (playedDate < existing.firstPlayed) {
-                    existing.firstPlayed = playedDate;
-                }
+                existing.firstPlayed = Math.min(
+                    existing.firstPlayed,
+                    firstPlayed,
+                );
             } else {
-                songMap.set(trackId, { count: 1, firstPlayed: playedDate });
+                songMap.set(item.spotify_track_uri, { count: 1, firstPlayed });
             }
         }
 
@@ -288,7 +270,7 @@ export const analysisProcessFile = internalAction({
             for (const [key, info] of batchEntries) {
                 mapData[key] = {
                     count: info.count,
-                    firstPlayed: info.firstPlayed.getTime(),
+                    firstPlayed: info.firstPlayed,
                 };
             }
 
@@ -311,14 +293,16 @@ export const analysisWriteBatchedAggregateUpdates = internalMutation({
         userId: v.id("users"),
     }),
     handler: async (ctx, { data, userId }) => {
-        for (const [key, info] of Object.entries(data)) {
-            await ctx.db.insert("partialAnalysisSongs", {
-                userId,
-                spotifyId: key,
-                timesPlayed: info.count,
-                firstPlayed: info.firstPlayed,
-            });
-        }
+        await Promise.all(
+            Object.entries(data).map(([key, info]) =>
+                ctx.db.insert("partialAnalysisSongs", {
+                    userId,
+                    spotifyId: key,
+                    timesPlayed: info.count,
+                    firstPlayed: info.firstPlayed,
+                }),
+            ),
+        );
     },
 });
 
@@ -335,42 +319,46 @@ export const analysisNextBatchMergePartialAggregates = internalMutation({
 
         const partialSongs = await ctx.db
             .query("partialAnalysisSongs")
-            .withIndex("userId", (q) => q.eq("userId", userId))
+            .withIndex("userId_spotifyId", (q) => q.eq("userId", userId))
             .paginate({
                 numItems: batchSize,
                 cursor,
             });
 
-        for (const partialSong of partialSongs.page) {
-            const existingSong = await ctx.db
-                .query("analysisSongs")
-                .withIndex("userId_spotifyId", (q) =>
-                    q
-                        .eq("userId", userId)
-                        .eq("spotifyId", partialSong.spotifyId),
-                )
-                .first();
+        const aggregates = [...mergeSongAggregates(partialSongs.page)];
+        const existingSongs = await Promise.all(
+            aggregates.map(([spotifyId]) =>
+                ctx.db
+                    .query("analysisSongs")
+                    .withIndex("userId_spotifyId", (q) =>
+                        q.eq("userId", userId).eq("spotifyId", spotifyId),
+                    )
+                    .first(),
+            ),
+        );
 
-            if (existingSong) {
-                await ctx.db.patch(existingSong._id, {
-                    timesPlayed:
-                        existingSong.timesPlayed + partialSong.timesPlayed,
-                    firstPlayed: Math.min(
-                        existingSong.firstPlayed,
-                        partialSong.firstPlayed,
-                    ),
-                });
-            } else {
-                await ctx.db.insert("analysisSongs", {
-                    userId,
-                    spotifyId: partialSong.spotifyId,
-                    timesPlayed: partialSong.timesPlayed,
-                    firstPlayed: partialSong.firstPlayed,
-                });
-            }
-
-            await ctx.db.delete(partialSong._id);
-        }
+        await Promise.all(
+            aggregates.map(([spotifyId, aggregate], index) => {
+                const existingSong = existingSongs[index];
+                return existingSong
+                    ? ctx.db.patch(existingSong._id, {
+                          timesPlayed:
+                              existingSong.timesPlayed + aggregate.timesPlayed,
+                          firstPlayed: Math.min(
+                              existingSong.firstPlayed,
+                              aggregate.firstPlayed,
+                          ),
+                      })
+                    : ctx.db.insert("analysisSongs", {
+                          userId,
+                          spotifyId,
+                          ...aggregate,
+                      });
+            }),
+        );
+        await Promise.all(
+            partialSongs.page.map((song) => ctx.db.delete(song._id)),
+        );
 
         return {
             nextCursor: partialSongs.continueCursor,
@@ -401,9 +389,7 @@ export const analysisNextBatchFilterSongs = internalMutation({
                 cursor,
             });
 
-        for (const song of songs.page) {
-            await ctx.db.delete(song._id);
-        }
+        await Promise.all(songs.page.map((song) => ctx.db.delete(song._id)));
 
         return {
             nextCursor: songs.continueCursor,
