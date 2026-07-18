@@ -33,6 +33,14 @@ export const performAnalysisWorkflow = internalAction({
             const step = user.analysisStep ?? -1;
 
             if (step < AnalysisStep.PARSING) {
+                let cleared = false;
+                while (!cleared) {
+                    cleared = await ctx.runMutation(
+                        internal.analysis.analysisClearPreviousData,
+                        { userId: args.userId },
+                    );
+                }
+
                 await ctx.runMutation(internal.analysis.updateAnalysisWork, {
                     userId: args.userId,
                     step: AnalysisStep.PARSING,
@@ -202,6 +210,30 @@ export const analysisGetUser = internalQuery({
     }),
     handler: async (ctx, { userId }) => {
         return (await ctx.db.get(userId)) as Doc<"users">;
+    },
+});
+
+export const analysisClearPreviousData = internalMutation({
+    args: v.object({
+        userId: v.id("users"),
+    }),
+    handler: async (ctx, { userId }) => {
+        const [partialSongs, songs] = await Promise.all([
+            ctx.db
+                .query("partialAnalysisSongs")
+                .withIndex("userId_spotifyId", (q) => q.eq("userId", userId))
+                .take(500),
+            ctx.db
+                .query("analysisSongs")
+                .withIndex("userId_spotifyId", (q) => q.eq("userId", userId))
+                .take(500),
+        ]);
+
+        await Promise.all(
+            [...partialSongs, ...songs].map((song) => ctx.db.delete(song._id)),
+        );
+
+        return partialSongs.length < 500 && songs.length < 500;
     },
 });
 

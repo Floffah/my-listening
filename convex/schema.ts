@@ -31,6 +31,14 @@ const schema = defineSchema({
         analysisStatus: v.optional(vAnalysisStatus),
         analysisStep: v.optional(vAnalysisStep),
         analysisMessage: v.optional(v.string()),
+        spotifyPlaylistStatus: v.optional(
+            v.union(
+                v.literal("in_progress"),
+                v.literal("completed"),
+                v.literal("failed"),
+            ),
+        ),
+        spotifyPlaylistError: v.optional(v.string()),
     }).index("clerkUserId", ["clerkUserId"]),
 
     partialAnalysisSongs: defineTable({

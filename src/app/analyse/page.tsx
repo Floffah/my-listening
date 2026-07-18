@@ -19,13 +19,19 @@ export default function Page() {
         <AnimatePresence mode="wait">
             {(!currentUser ||
                 currentUser.analysisStatus === "not_started" ||
-                !currentUser.analysisStatus) && <Upload key="upload" />}
+                currentUser.analysisStatus === "failed" ||
+                !currentUser.analysisStatus) && (
+                <Upload
+                    isRetry={currentUser?.analysisStatus === "failed"}
+                    key="upload"
+                />
+            )}
 
             {currentUser?.analysisStatus === "in_progress" && (
                 <InProgress key="in-progress" user={currentUser} />
             )}
             {currentUser?.analysisStatus === "completed" && (
-                <SongsList key="songs-list" />
+                <SongsList key="songs-list" user={currentUser} />
             )}
         </AnimatePresence>
     );

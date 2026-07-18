@@ -1,8 +1,13 @@
 import { ConvexError, v } from "convex/values";
 
 import { internal } from "./_generated/api";
+import type { Doc } from "./_generated/dataModel";
 import { mutation } from "./_generated/server";
 import { ensureOrCreateUser, ensureUser } from "./lib/auth";
+
+export function canStartAnalysis(status: Doc<"users">["analysisStatus"]) {
+    return !status || status === "not_started" || status === "failed";
+}
 
 export const generateUploadUrl = mutation({
     handler: async (ctx) => {
@@ -27,11 +32,11 @@ export const startAnalysis = mutation({
     handler: async (ctx, { storageId }) => {
         const user = await ensureUser(ctx);
 
-        if (user.analysisStatus && user.analysisStatus !== "not_started") {
+        if (!canStartAnalysis(user.analysisStatus)) {
             throw new ConvexError("User already has an analysis in progress");
         }
 
-        const storageUrl = ctx.storage.getUrl(storageId);
+        const storageUrl = await ctx.storage.getUrl(storageId);
 
         if (!storageUrl) {
             throw new ConvexError("Invalid storage ID");

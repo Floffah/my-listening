@@ -1,3 +1,4 @@
+import { vOnCompleteArgs } from "@convex-dev/workpool";
 import { SpotifyApi } from "@spotify/web-api-ts-sdk";
 import { paginationOptsValidator } from "convex/server";
 import { ConvexError, v } from "convex/values";
@@ -6,6 +7,7 @@ import { internal } from "@/convex/api";
 import {
     action,
     internalAction,
+    internalMutation,
     internalQuery,
     mutation,
     query,
@@ -70,13 +72,44 @@ export const addToSpotify = mutation({
     handler: async (ctx) => {
         const user = await ensureUser(ctx);
 
+        if (user.spotifyPlaylistStatus === "in_progress") {
+            throw new ConvexError(
+                "A Spotify playlist is already being created",
+            );
+        }
+
+        await ctx.db.patch(user._id, {
+            spotifyPlaylistStatus: "in_progress",
+            spotifyPlaylistError: undefined,
+        });
+
         await spotifyAddWorkpool.enqueueAction(
             ctx,
             internal.songs.internalAddSongsToPlaylist,
             {
                 userId: user._id,
             },
+            {
+                onComplete: internal.songs.spotifyPlaylistCompleted,
+                context: { userId: user._id },
+            },
         );
+    },
+});
+
+export const spotifyPlaylistCompleted = internalMutation({
+    args: vOnCompleteArgs(v.object({ userId: v.id("users") })),
+    handler: async (ctx, { context, result }) => {
+        await ctx.db.patch(context.userId, {
+            spotifyPlaylistStatus:
+                result.kind === "success" ? "completed" : "failed",
+            spotifyPlaylistError:
+                result.kind === "failed"
+                    ? result.error
+                    : result.kind === "canceled"
+                      ? "Playlist creation was canceled"
+                      : undefined,
+        });
     },
 });
 

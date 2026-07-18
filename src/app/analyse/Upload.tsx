@@ -9,27 +9,33 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/convex/api";
 
-export default function Upload() {
+export default function Upload({ isRetry = false }: { isRetry?: boolean }) {
     const getUploadUrl = useConvexMutation(api.upload.generateUploadUrl);
     const startAnalysis = useConvexMutation(api.upload.startAnalysis);
 
     const uploadFile = useMutation({
         mutationFn: async ({ file }: { file: File }) => {
-            if (file.type !== "application/zip") {
-                return alert("Please upload a .zip file");
+            if (!file.name.toLowerCase().endsWith(".zip")) {
+                throw new Error("Please upload a .zip file");
             }
 
             const uploadUrl = await getUploadUrl();
 
             const result = await fetch(uploadUrl, {
                 method: "POST",
-                headers: { "Content-Type": file!.type },
+                headers: { "Content-Type": file.type || "application/zip" },
                 body: file,
             });
+
+            if (!result.ok) {
+                throw new Error("Could not upload the ZIP file");
+            }
+
             const { storageId } = await result.json();
 
             await startAnalysis({ storageId });
         },
+        onError: (error) => alert(error.message),
     });
 
     return (
@@ -51,13 +57,23 @@ export default function Upload() {
                     Upload your Spotify streaming history
                 </h1>
                 <p className="max-w-md text-center text-muted-foreground">
-                    Spotify doesn't store your entire streaming history on your
+                    Spotify doesn&apos;t store your entire streaming history on your
                     account. But, you can request the long term storage data
                     from Spotify and upload it here for analysis.
                 </p>
                 <Button variant="link" asChild>
                     <Link href="/analyse/how">Learn how</Link>
                 </Button>
+
+                {isRetry && (
+                    <p
+                        className="max-w-md text-center text-sm text-destructive"
+                        role="alert"
+                    >
+                        The previous analysis failed. Please try uploading your
+                        ZIP file again.
+                    </p>
+                )}
 
                 <Input
                     type="file"
@@ -68,6 +84,7 @@ export default function Upload() {
                         const file = e.target.files?.[0];
                         if (file) {
                             uploadFile.mutate({ file });
+                            e.currentTarget.value = "";
                         }
                     }}
                 />

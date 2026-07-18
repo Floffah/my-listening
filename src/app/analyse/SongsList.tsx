@@ -10,9 +10,9 @@ import { useOnInView } from "react-intersection-observer";
 
 import { Button } from "@/components/ui/button";
 import { api } from "@/convex/api";
-import { Doc } from "@/convex/dataModel";
+import type { Doc } from "@/convex/dataModel";
 
-export default function SongsList() {
+export default function SongsList({ user }: { user: Doc<"users"> }) {
     const addToSpotify = useMutation(api.songs.addToSpotify);
 
     const songs = usePaginatedQuery(
@@ -32,6 +32,7 @@ export default function SongsList() {
     return (
         <div className="flex min-h-0 max-w-lg flex-col gap-4">
             <Button
+                disabled={user.spotifyPlaylistStatus === "in_progress"}
                 onClick={() =>
                     addToSpotify().catch((e) => {
                         const message =
@@ -41,8 +42,21 @@ export default function SongsList() {
                     })
                 }
             >
-                Create chronological playlist in Spotify
+                {user.spotifyPlaylistStatus === "in_progress"
+                    ? "Creating playlist…"
+                    : "Create chronological playlist in Spotify"}
             </Button>
+            {user.spotifyPlaylistStatus === "failed" && (
+                <p className="text-sm text-destructive" role="alert">
+                    {user.spotifyPlaylistError ||
+                        "Could not create the Spotify playlist. Please try again."}
+                </p>
+            )}
+            {user.spotifyPlaylistStatus === "completed" && (
+                <p className="text-sm text-muted-foreground" role="status">
+                    Playlist created in Spotify.
+                </p>
+            )}
             {songs.results.map((song) => (
                 <SpotifySongCard analysisSong={song} key={song._id} />
             ))}
