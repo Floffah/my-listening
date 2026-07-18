@@ -8,8 +8,14 @@
  * @module
  */
 
-import type * as auth from "../auth.js";
-import type * as http from "../http.js";
+import type * as analysis from "../analysis.js";
+import type * as analysisnode from "../analysisnode.js";
+import type * as lib_aggregateSongs from "../lib/aggregateSongs.js";
+import type * as lib_auth from "../lib/auth.js";
+import type * as lib_components from "../lib/components.js";
+import type * as songs from "../songs.js";
+import type * as upload from "../upload.js";
+import type * as user from "../user.js";
 
 import type {
   ApiFromModules,
@@ -18,8 +24,14 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
-  auth: typeof auth;
-  http: typeof http;
+  analysis: typeof analysis;
+  analysisnode: typeof analysisnode;
+  "lib/aggregateSongs": typeof lib_aggregateSongs;
+  "lib/auth": typeof lib_auth;
+  "lib/components": typeof lib_components;
+  songs: typeof songs;
+  upload: typeof upload;
+  user: typeof user;
 }>;
 
 /**
@@ -48,4 +60,7 @@ export declare const internal: FilterApi<
   FunctionReference<any, "internal">
 >;
 
-export declare const components: {};
+export declare const components: {
+  analysisWorkpool: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"analysisWorkpool">;
+  spotifyAddWorkpool: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"spotifyAddWorkpool">;
+};

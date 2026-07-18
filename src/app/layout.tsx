@@ -1,20 +1,13 @@
-import { ConvexAuthNextjsServerProvider } from "@convex-dev/auth/nextjs/server";
+import { ClerkProvider } from "@clerk/nextjs";
+import { shadcn } from "@clerk/ui/themes";
 import type { Metadata } from "next";
-import {
-    Geist,
-    Geist_Mono,
-    Inter,
-    JetBrains_Mono,
-    Nunito,
-} from "next/font/google";
+import { JetBrains_Mono, Nunito } from "next/font/google";
 import { PropsWithChildren } from "react";
 
 import { ConvexClientProvider } from "@/components/provider/ConvexClientProvider";
 import { cn } from "@/lib/utils";
 
 import "./globals.css";
-
-const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
 const sansFont = Nunito({
     variable: "--font-sans",
@@ -33,18 +26,18 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: PropsWithChildren) {
     return (
-        <ConvexAuthNextjsServerProvider>
-            <html lang="en" className={inter.variable}>
-                <body
-                    className={cn(
-                        "antialiased",
-                        sansFont.variable,
-                        monoFont.variable,
-                    )}
-                >
+        <html lang="en" className="dark" suppressHydrationWarning>
+            <body
+                className={cn(
+                    "antialiased",
+                    sansFont.variable,
+                    monoFont.variable,
+                )}
+            >
+                <ClerkProvider appearance={{ theme: shadcn }}>
                     <ConvexClientProvider>{children}</ConvexClientProvider>
-                </body>
-            </html>
-        </ConvexAuthNextjsServerProvider>
+                </ClerkProvider>
+            </body>
+        </html>
     );
 }

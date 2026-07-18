@@ -1,9 +1,11 @@
-import { convexAuthNextjsMiddleware } from "@convex-dev/auth/nextjs/server";
+import { clerkMiddleware } from "@clerk/nextjs/server";
 
-export default convexAuthNextjsMiddleware();
+export default clerkMiddleware();
 
 export const config = {
-    // The following matcher runs middleware on all routes
-    // except static assets.
-    matcher: ["/((?!.*\\..*|_next).*)", "/", "/(api|trpc)(.*)"],
+    matcher: [
+        "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
+        "/(api|trpc)(.*)",
+        "/__clerk/:path*",
+    ],
 };
