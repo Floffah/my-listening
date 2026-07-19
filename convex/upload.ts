@@ -33,13 +33,13 @@ export const startAnalysis = mutation({
         const user = await ensureUser(ctx);
 
         if (!canStartAnalysis(user.analysisStatus)) {
-            throw new ConvexError("User already has an analysis in progress");
+            throw new ConvexError("An analysis is already running");
         }
 
         const storageUrl = await ctx.storage.getUrl(storageId);
 
         if (!storageUrl) {
-            throw new ConvexError("Invalid storage ID");
+            throw new ConvexError("The uploaded ZIP could not be found");
         }
 
         await ctx.db.patch(user._id, {

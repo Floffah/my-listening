@@ -1,3 +1,5 @@
+.hallmark
+
 # Created by https://www.toptal.com/developers/gitignore/api/node,macos,react,nextjs,jetbrains+all,turbo
 # Edit at https://www.toptal.com/developers/gitignore?templates=node,macos,react,nextjs,jetbrains+all,turbo
 
@@ -231,7 +233,7 @@ web_modules/
 .env
 .env.development.local
 .env.test.local
-.env.production.local
+.env.vercel.local
 .env.local
 
 # parcel-bundler cache (https://parceljs.org/)

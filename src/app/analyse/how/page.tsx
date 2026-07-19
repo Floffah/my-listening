@@ -1,100 +1,124 @@
-"use client";
-
-import { ArrowLeftIcon } from "lucide-react";
-import { AnimatePresence, motion } from "motion/react";
+import { ArrowLeftIcon, ExternalLinkIcon } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import GetSpotifyData from "@/public/data.png";
 import ReceivedSpotifyData from "@/public/received.png";
 
+const steps = [
+    {
+        number: "1.0",
+        title: "Request your Extended Streaming History",
+        body: (
+            <>
+                On Spotify&apos;s privacy page, request Extended Streaming
+                History. You do not need the smaller Account data download.
+            </>
+        ),
+        image: (
+            <Image
+                src={GetSpotifyData}
+                alt="Spotify privacy settings with Extended Streaming History selected"
+                className="rounded-xl"
+                priority
+            />
+        ),
+    },
+    {
+        number: "2.0",
+        title: "Wait for Spotify's email",
+        body: (
+            <>
+                Spotify says this can take several days, and large archives can
+                take a few weeks. The download link in the email expires, so
+                grab the ZIP when it arrives.
+            </>
+        ),
+    },
+    {
+        number: "3.0",
+        title: "Download the ZIP",
+        body: <>Keep the ZIP intact, then come back here and upload it.</>,
+        image: (
+            <Image
+                src={ReceivedSpotifyData}
+                alt="Spotify email containing a link to download account data"
+                className="rounded-xl"
+            />
+        ),
+    },
+];
+
 export default function Page() {
-    const [step, setStep] = useState(0);
-
     return (
-        <div className="flex flex-col items-center">
-            <Button variant="link" asChild>
-                <Link href="/analyse">
-                    <ArrowLeftIcon /> Back to Upload
-                </Link>
-            </Button>
-
-            <AnimatePresence mode="wait">
-                {step === 0 && (
-                    <motion.div
-                        initial={{ opacity: 1 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="flex max-w-md flex-col items-center gap-4 text-center"
-                        key="step-1"
+        <article className="flex flex-col gap-12">
+            <header className="flex max-w-3xl flex-col items-start gap-6">
+                <Button variant="link" size="lg" asChild>
+                    <Link href="/analyse">
+                        <ArrowLeftIcon data-icon="inline-start" />
+                        Back to upload
+                    </Link>
+                </Button>
+                <Badge variant="secondary">Getting the archive</Badge>
+                <h1 className="font-display text-4xl leading-tight font-bold tracking-tighter sm:text-6xl">
+                    Get your Spotify archive first.
+                </h1>
+                <p className="max-w-2xl text-lg leading-relaxed text-muted-foreground">
+                    This tool needs the Extended Streaming History ZIP. Request
+                    it from Spotify&apos;s privacy page, then upload the ZIP
+                    here.
+                </p>
+                <Button variant="outline" size="lg" asChild>
+                    <a
+                        href="https://www.spotify.com/account/privacy/"
+                        target="_blank"
+                        rel="noreferrer"
                     >
-                        <p>
-                            Go to your{" "}
-                            <a
-                                href="https://www.spotify.com/account/privacy/"
-                                className="text-blue-200 underline"
-                            >
-                                Spotify privacy page
-                            </a>
-                            , select the data options below, and request your
-                            data.
-                        </p>
+                        Open Spotify&apos;s privacy page
+                        <ExternalLinkIcon data-icon="inline-end" />
+                    </a>
+                </Button>
+            </header>
 
-                        <Image
-                            src={GetSpotifyData}
-                            alt="Select ONLY extended streaming history, nothing else."
-                        />
+            <Separator />
 
-                        <Button size="lg" onClick={() => setStep(step + 1)}>
-                            I did it!
-                        </Button>
-                    </motion.div>
-                )}
-                {step === 1 && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="flex max-w-md flex-col items-center gap-4 text-center"
-                        key="step-2"
+            <ol className="flex flex-col gap-16">
+                {steps.map((step, index) => (
+                    <li
+                        key={step.number}
+                        className="grid gap-6 lg:grid-cols-3 lg:gap-12"
                     >
-                        <p>
-                            Wait for a few days, or weeks, until you receive an
-                            email from Spotify with a link to download your
-                            data.
+                        <p className="font-mono text-sm text-spotify">
+                            {step.number}
                         </p>
+                        <div className="flex min-w-0 flex-col gap-4 lg:col-span-2">
+                            <h2 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
+                                {step.title}
+                            </h2>
+                            <p className="max-w-2xl text-lg leading-relaxed text-muted-foreground">
+                                {step.body}
+                            </p>
+                            {step.image && (
+                                <figure className="mt-2 max-w-2xl overflow-hidden rounded-xl ring-1 ring-foreground/10">
+                                    {step.image}
+                                </figure>
+                            )}
+                            {index < steps.length - 1 && (
+                                <Separator className="mt-8" />
+                            )}
+                        </div>
+                    </li>
+                ))}
+            </ol>
 
-                        <Button size="lg" onClick={() => setStep(step + 1)}>
-                            I got the email...
-                        </Button>
-                    </motion.div>
-                )}
-                {step === 2 && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="flex max-w-md flex-col items-center gap-4 text-center"
-                        key="step-3"
-                    >
-                        <p>
-                            Download the ZIP file from the email, and upload it
-                            with the uploader on the previous page.
-                        </p>
-
-                        <Image
-                            src={ReceivedSpotifyData}
-                            alt="Email from Spotify with download link."
-                        />
-
-                        <Button size="lg" asChild>
-                            <Link href="/analyse">Got it, take me back</Link>
-                        </Button>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-        </div>
+            <div className="flex justify-end">
+                <Button size="lg" asChild>
+                    <Link href="/analyse">Choose the ZIP</Link>
+                </Button>
+            </div>
+        </article>
     );
 }

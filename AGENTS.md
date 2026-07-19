@@ -21,6 +21,7 @@ The hallmark skill should be followed as closely as possible, however there are 
 
 - Use Tailwind CSS first for all UI implementation. Keep regular CSS limited to shared design tokens, global base rules, and cases Tailwind cannot express cleanly.
 - Design tokens are defined in globals.css inside the `:root` block and turned into tailwind utilities via the `@theme inline` block.
+- Do not create a standalone `tokens.css`; `src/app/globals.css` is the single source of truth for design tokens.
 - Order of precedence for animations (instead of hallmark's suggestion): (tailwind) css transitions, tw-animate-css, motion.dev (framer-motion).
 - Colours and tokens should attempt to use tailwind builtins as much as possible (e.g. `var(--color-green-400)` over an arbitrary oklch), but it is fine to escape them a bit within reason. Everything custom defined here should be exposed to tailwind so everything is accessible via utility rather than css `var()` calls.
 - Avoid arbitrary tailwind utilities (`utility-[xyz]`) and prefer true tailwind utilities.

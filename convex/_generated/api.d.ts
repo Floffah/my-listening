@@ -13,6 +13,7 @@ import type * as analysisnode from "../analysisnode.js";
 import type * as lib_aggregateSongs from "../lib/aggregateSongs.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_components from "../lib/components.js";
+import type * as lib_spotifyEligibility from "../lib/spotifyEligibility.js";
 import type * as songs from "../songs.js";
 import type * as upload from "../upload.js";
 import type * as user from "../user.js";
@@ -29,6 +30,7 @@ declare const fullApi: ApiFromModules<{
   "lib/aggregateSongs": typeof lib_aggregateSongs;
   "lib/auth": typeof lib_auth;
   "lib/components": typeof lib_components;
+  "lib/spotifyEligibility": typeof lib_spotifyEligibility;
   songs: typeof songs;
   upload: typeof upload;
   user: typeof user;

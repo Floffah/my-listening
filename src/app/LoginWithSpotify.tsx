@@ -1,7 +1,7 @@
 "use client";
 
 import { SignInButton } from "@clerk/nextjs";
-import { SiSpotify } from "@icons-pack/react-simple-icons";
+import { LogInIcon, Music2Icon } from "lucide-react";
 import { ComponentProps } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -11,9 +11,9 @@ export default function LoginWithSpotify(
 ) {
     return (
         <SignInButton mode="modal" forceRedirectUrl="/analyse">
-            <Button className="transition-transform hover:scale-105" {...props}>
-                <SiSpotify />
-                Login with Spotify
+            <Button size="lg" {...props}>
+                <LogInIcon data-icon="inline-start" />
+                Continue to Login
             </Button>
         </SignInButton>
     );

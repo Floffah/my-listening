@@ -16,11 +16,71 @@ import {
 import { env } from "./convex.env";
 import { ensureUser } from "./lib/auth";
 import { spotifyAddWorkpool } from "./lib/components";
+import { classifySpotifyEligibility } from "./lib/spotifyEligibility";
 
 const spotify = SpotifyApi.withClientCredentials(
     env.SPOTIFY_CLIENT_ID,
     env.SPOTIFY_CLIENT_SECRET,
 );
+
+type SpotifyToken = { token: string; scopes?: string[] };
+
+async function getSpotifyToken(clerkUserId: string) {
+    const response = await fetch(
+        `https://api.clerk.com/v1/users/${encodeURIComponent(clerkUserId)}/oauth_access_tokens/oauth_spotify?paginated=true`,
+        {
+            headers: { Authorization: `Bearer ${env.CLERK_SECRET_KEY}` },
+        },
+    );
+
+    if (!response.ok) {
+        throw new ConvexError("Could not access your Spotify connection");
+    }
+
+    const body = (await response.json()) as
+        { data: SpotifyToken[] } | SpotifyToken[];
+    return (Array.isArray(body) ? body : body.data)[0] ?? null;
+}
+
+function hasPlaylistScope(token: SpotifyToken | null) {
+    return Boolean(
+        token &&
+        (!token.scopes || token.scopes.includes("playlist-modify-private")),
+    );
+}
+
+export const getSpotifyEligibility = action({
+    handler: async (ctx) => {
+        const user = await ctx.runQuery(internal.user.internalEnsureUser);
+
+        let token: SpotifyToken | null;
+        try {
+            token = await getSpotifyToken(user.clerkUserId);
+        } catch {
+            return {
+                canCreatePlaylist: false,
+                reason: "spotify_unavailable" as const,
+            };
+        }
+
+        if (!token || !hasPlaylistScope(token)) {
+            return classifySpotifyEligibility({
+                hasToken: Boolean(token),
+                hasPlaylistScope: hasPlaylistScope(token),
+            });
+        }
+
+        const response = await fetch("https://api.spotify.com/v1/me", {
+            headers: { Authorization: `Bearer ${token.token}` },
+        });
+
+        return classifySpotifyEligibility({
+            hasToken: true,
+            hasPlaylistScope: true,
+            spotifyStatus: response.status,
+        });
+    },
+});
 
 export const getSongs = query({
     args: {
@@ -122,57 +182,44 @@ export const internalAddSongsToPlaylist = internalAction({
             userId,
         });
 
-        const response = await fetch(
-            `https://api.clerk.com/v1/users/${encodeURIComponent(user.clerkUserId)}/oauth_access_tokens/oauth_spotify?paginated=true`,
-            {
-                headers: { Authorization: `Bearer ${env.CLERK_SECRET_KEY}` },
-            },
-        );
-
-        if (!response.ok) {
-            throw new ConvexError("Could not access your Spotify connection");
-        }
-
-        const body = (await response.json()) as
-            | { data: { token: string; scopes?: string[] }[] }
-            | { token: string; scopes?: string[] }[];
-        const data = Array.isArray(body) ? body : body.data;
-        const spotifyToken = data[0];
+        const spotifyToken = await getSpotifyToken(user.clerkUserId);
 
         if (!spotifyToken) {
             throw new ConvexError("Spotify is not connected to this account");
         }
-        if (
-            spotifyToken.scopes &&
-            !spotifyToken.scopes.includes("playlist-modify-private")
-        ) {
+        if (!hasPlaylistScope(spotifyToken)) {
             throw new ConvexError(
                 "Spotify needs permission to create private playlists",
             );
         }
 
-        const spotifyUserApi = SpotifyApi.withAccessToken(
-            env.SPOTIFY_CLIENT_ID,
+        const playlistResponse = await fetch(
+            "https://api.spotify.com/v1/me/playlists",
             {
-                access_token: spotifyToken.token,
-                token_type: "Bearer",
-                expires_in: 0,
-                refresh_token: "",
+                method: "POST",
+                headers: {
+                    Authorization: `Bearer ${spotifyToken.token}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    collaborative: false,
+                    name: "My listening history",
+                    description:
+                        "Songs I played at least ten times, sorted by when I first heard them. Made with My Listening.",
+                    public: false,
+                }),
             },
         );
 
-        const profile = await spotifyUserApi.currentUser.profile();
+        if (!playlistResponse.ok) {
+            throw new ConvexError(
+                playlistResponse.status === 403
+                    ? "Spotify rejected playlist access for this Development Mode account"
+                    : `Spotify could not create the playlist (${playlistResponse.status})`,
+            );
+        }
 
-        const playlist = await spotifyUserApi.playlists.createPlaylist(
-            profile.id,
-            {
-                collaborative: false,
-                name: "My listening history",
-                description:
-                    "A playlist of all the songs I've listened to, generated using My Listening by Floffah",
-                public: false,
-            },
-        );
+        const playlist = (await playlistResponse.json()) as { id: string };
 
         let done = false;
         let cursor: string | null = null;
@@ -188,10 +235,23 @@ export const internalAddSongsToPlaylist = internalAction({
             });
 
             if (songs.spotifyIds.length > 0) {
-                await spotifyUserApi.playlists.addItemsToPlaylist(
-                    playlist.id,
-                    songs.spotifyIds,
+                const addResponse = await fetch(
+                    `https://api.spotify.com/v1/playlists/${encodeURIComponent(playlist.id)}/items`,
+                    {
+                        method: "POST",
+                        headers: {
+                            Authorization: `Bearer ${spotifyToken.token}`,
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({ uris: songs.spotifyIds }),
+                    },
                 );
+
+                if (!addResponse.ok) {
+                    throw new ConvexError(
+                        `Spotify could not add playlist items (${addResponse.status})`,
+                    );
+                }
             }
 
             cursor = songs.nextCursor;

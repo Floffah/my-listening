@@ -23,6 +23,7 @@ export const performAnalysisWorkflow = internalAction({
             await ctx.runMutation(internal.analysis.updateAnalysisWork, {
                 userId: args.userId,
                 status: "in_progress",
+                message: "Opening the ZIP",
             });
 
             const user = await ctx.runQuery(
@@ -44,6 +45,7 @@ export const performAnalysisWorkflow = internalAction({
                 await ctx.runMutation(internal.analysis.updateAnalysisWork, {
                     userId: args.userId,
                     step: AnalysisStep.PARSING,
+                    message: "Reading the streaming history files",
                 });
 
                 const storageIds = await ctx.runAction(
@@ -65,6 +67,7 @@ export const performAnalysisWorkflow = internalAction({
                 await ctx.runMutation(internal.analysis.updateAnalysisWork, {
                     userId: args.userId,
                     step: AnalysisStep.MERGING,
+                    message: "Matching duplicate tracks and adding their plays",
                 });
 
                 let cursor: string | null = null;
@@ -77,7 +80,7 @@ export const performAnalysisWorkflow = internalAction({
                                 userId: args.userId,
                                 status: "in_progress",
                                 message:
-                                    "Lots of data, analysis may take a while",
+                                    "Still working. This archive has a lot of plays.",
                             },
                         );
 
@@ -111,6 +114,7 @@ export const performAnalysisWorkflow = internalAction({
                 await ctx.runMutation(internal.analysis.updateAnalysisWork, {
                     userId: args.userId,
                     step: AnalysisStep.FILTERING,
+                    message: "Removing tracks with fewer than ten plays",
                 });
 
                 const startedFilterAt = Date.now();
@@ -125,7 +129,7 @@ export const performAnalysisWorkflow = internalAction({
                                 userId: args.userId,
                                 status: "in_progress",
                                 message:
-                                    "Lots of data, analysis may take a while",
+                                    "Still working. This archive has a lot of plays.",
                             },
                         );
                         break;
@@ -156,6 +160,7 @@ export const performAnalysisWorkflow = internalAction({
             await ctx.runMutation(internal.analysis.updateAnalysisWork, {
                 userId: args.userId,
                 status: "completed",
+                message: "Done. The tracks are sorted by their first play.",
             });
         } catch (e) {
             await ctx.runMutation(internal.analysis.updateAnalysisWork, {
